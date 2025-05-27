@@ -19,15 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: "zulu"
-          cache: 'gradle'
-
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v4
 
       - name: Accept licenses
         run: yes | sdkmanager --licenses
