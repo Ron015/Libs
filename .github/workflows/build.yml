@@ -1,0 +1,68 @@
+name: Build NDK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - 'README.md'
+      - 'fastlane/**'
+      - '.github/**/*.md'
+      - '.github/FUNDING.yml'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.git/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: "zulu"
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Download cURL source
+        run: |
+          curl -L https://curl.se/download/curl-8.13.0.tar.gz -o curl.tar.gz
+          tar -xzf curl.tar.gz
+          mv curl-* curl-src
+        
+      - name: Set up environment
+        run: |
+          echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
+          
+      - name: Build for Android ABIs
+        run: |
+          cd curl-src
+          ./build_android.sh
+          
+      - name: Package artifacts
+        run: |
+          mkdir -p artifacts
+          cp -r curl-src/android/* artifacts/
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: curl-android-libs
+          path: artifacts/
+          retention-days: 7
