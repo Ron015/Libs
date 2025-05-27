@@ -1,0 +1,47 @@
+name: Build cURL for Android
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up NDK
+      uses: android-actions/setup-android@v2
+      with:
+        ndk-version: '25.1.8937393'  # Use latest stable version
+        
+    - name: Download cURL source
+      run: |
+        curl -L https://curl.se/download/curl-8.6.0.tar.gz -o curl.tar.gz
+        tar -xzf curl.tar.gz
+        mv curl-* curl-src
+        
+    - name: Set up environment
+      run: |
+        echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
+        
+    - name: Build for Android ABIs
+      run: |
+        cd curl-src
+        ./build_android.sh
+        
+    - name: Package artifacts
+      run: |
+        mkdir -p artifacts
+        cp -r curl-src/android/* artifacts/
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: curl-android-libs
+        path: artifacts/
+        retention-days: 7
