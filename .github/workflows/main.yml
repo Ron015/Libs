@@ -12,33 +12,94 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      
+      
+    - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: "zulu"
+          cache: 'gradle'
     
-    - name: Set up NDK
-      uses: android-actions/setup-android@2
+    - name: Set up Android NDK
+      uses: android-actions/setup-android@v2
       with:
-        ndk-version: '26.1.10909125'  # Use latest stable version
-        
+        ndk-version: '26.1.10909125'
+    
     - name: Download cURL source
       run: |
         curl -L https://curl.se/download/curl-8.13.0.tar.gz -o curl.tar.gz
         tar -xzf curl.tar.gz
         mv curl-* curl-src
-        
+
     - name: Set up environment
       run: |
         echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
         echo "PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
-        
+
+    - name: Create build_android.sh
+      run: |
+        cat <<'EOF' > curl-src/build_android.sh
+        #!/bin/bash
+        set -e
+
+        API=21
+        ABIS=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
+        HOSTS=("armv7a-linux-androideabi" "aarch64-linux-android" "i686-linux-android" "x86_64-linux-android")
+        TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+
+        mkdir -p android
+
+        for i in ${!ABIS[@]}; do
+          ABI=${ABIS[$i]}
+          HOST=${HOSTS[$i]}
+
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export AS=$TOOLCHAIN/bin/llvm-as
+          export CC=$TOOLCHAIN/bin/${HOST}${API}-clang
+          export CXX=$TOOLCHAIN/bin/${HOST}${API}-clang++
+          export LD=$TOOLCHAIN/bin/ld
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+          export NM=$TOOLCHAIN/bin/llvm-nm
+
+          mkdir -p build-$ABI
+          cd build-$ABI
+
+          ../configure \
+            --host=$HOST \
+            --with-sysroot=$TOOLCHAIN/sysroot \
+            --disable-shared \
+            --enable-static \
+            --disable-ldap \
+            --disable-rtsp \
+            --disable-dict \
+            --disable-gopher \
+            --disable-pop3 \
+            --disable-smtp \
+            --disable-telnet \
+            --disable-tftp \
+            --disable-manual \
+            --disable-libcurl-option \
+            --prefix=$(pwd)/../../android/$ABI
+
+          make -j$(nproc)
+          make install
+          cd ..
+        done
+        EOF
+        chmod +x curl-src/build_android.sh
+
     - name: Build for Android ABIs
       run: |
         cd curl-src
         ./build_android.sh
-        
+
     - name: Package artifacts
       run: |
         mkdir -p artifacts
         cp -r curl-src/android/* artifacts/
-        
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
